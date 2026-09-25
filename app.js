@@ -50,9 +50,9 @@ const toolConfigs = {
       <label class="option">음질<select id="audioBitrate"><option value="128k">128 kbps</option><option value="192k" selected>192 kbps</option><option value="320k">320 kbps</option></select></label>`
   },
   'docx-hwpx': {
-    title: 'Word → 한글', eyebrow: 'DOCUMENT TOOL', accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', multiple: false,
-    description: 'DOCX를 표준 한글 문서 형식인 HWPX로 변환합니다. 복잡한 Word 레이아웃은 일부 달라질 수 있습니다.', action: 'HWPX로 변환',
-    options: () => ''
+    title: 'Word → HWPX', eyebrow: 'DOCUMENT TOOL · TEXT-FIRST', accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', multiple: false,
+    description: '글과 단순 표를 편집 가능한 HWPX로 옮깁니다. Word의 열 너비, 페이지 배치, 도형 등 복잡한 서식은 동일하게 유지되지 않습니다.', action: '내용을 HWPX로 변환',
+    options: () => '<p class="conversion-note wide"><strong>알아두세요</strong><span>원본 모양이 중요하면 아래 Office 편집기에서 DOCX 그대로 여는 것이 가장 정확합니다.</span></p>'
   }
 };
 
@@ -324,17 +324,58 @@ async function convertAudio() {
 
 async function docxToHwpx() {
   if (!window.mammoth) throw new Error('Word 변환 엔진을 불러오지 못했습니다.');
+  const docxBuffer = await selectedFiles[0].arrayBuffer();
   showStatus('Word 문서의 내용을 읽는 중…');
-  const result = await window.mammoth.convertToHtml({ arrayBuffer: await selectedFiles[0].arrayBuffer() });
+  const result = await window.mammoth.convertToHtml({ arrayBuffer: docxBuffer });
+  const warningCount = result.messages.filter(message => message.type === 'warning').length;
+  const conversion = await prepareDocxConversion(result.value, docxBuffer);
   showStatus('HWPX 문서를 만드는 중…');
   const { htmlToHwpx } = await import('https://cdn.jsdelivr.net/npm/@ssabrojs/hwpxjs@0.4.0/dist/browser/hwpxjs.browser.mjs');
-  const generated = await htmlToHwpx(result.value);
+  const generated = await htmlToHwpx(conversion.html);
   showStatus('한글 편집기 호환 형식으로 정리하는 중…');
-  const bytes = await normalizeHwpx(generated);
+  const bytes = await normalizeHwpx(generated, conversion.tableLayouts);
   downloadBlob(new Blob([bytes], { type: 'application/hwp+zip' }), `${baseName(selectedFiles[0].name)}.hwpx`);
+  showStatus(`변환 완료 · 텍스트와 단순 표 중심${warningCount ? ` · Word 서식 경고 ${warningCount}건` : ''}`);
 }
 
-async function normalizeHwpx(input) {
+async function prepareDocxConversion(html, docxBuffer) {
+  const documentZip = await JSZip.loadAsync(docxBuffer);
+  const documentXml = await documentZip.file('word/document.xml')?.async('text');
+  if (!documentXml) return { html, tableLayouts: [] };
+
+  const wordXml = new DOMParser().parseFromString(documentXml, 'application/xml');
+  if (wordXml.querySelector('parsererror')) return { html, tableLayouts: [] };
+  const htmlDocument = new DOMParser().parseFromString(`<main>${html}</main>`, 'text/html');
+  const wordTables = [...wordXml.getElementsByTagNameNS('*', 'tbl')];
+  const htmlTables = [...htmlDocument.querySelectorAll('table')];
+  const wordNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const wordAttribute = (element, name) => element.getAttributeNS(wordNamespace, name) || element.getAttribute(`w:${name}`);
+  const tableLayouts = wordTables.map(table => {
+    const columnWidths = [...table.getElementsByTagNameNS('*', 'gridCol')]
+      .map(column => Number(wordAttribute(column, 'w')) * 5)
+      .filter(width => Number.isFinite(width) && width > 0);
+    const rowHeights = [...table.children].flatMap(child => child.localName === 'tr' ? [child] : [])
+      .map(row => {
+        const height = row.getElementsByTagNameNS('*', 'trHeight')[0];
+        return Math.max(1000, Number(height && wordAttribute(height, 'val')) * 5 || 1500);
+      });
+    return { columnWidths, rowHeights };
+  });
+
+  htmlTables.forEach((table, tableIndex) => {
+    const firstMeaningfulRow = [...table.rows].find(row => row.textContent.trim());
+    if (firstMeaningfulRow) firstMeaningfulRow.querySelectorAll('td').forEach(cell => {
+      const heading = htmlDocument.createElement('th');
+      [...cell.attributes].forEach(attribute => heading.setAttribute(attribute.name, attribute.value));
+      heading.innerHTML = cell.innerHTML;
+      cell.replaceWith(heading);
+    });
+  });
+
+  return { html: htmlDocument.querySelector('main').innerHTML, tableLayouts };
+}
+
+async function normalizeHwpx(input, tableLayouts = []) {
   const source = await JSZip.loadAsync(input);
   const output = new JSZip();
   output.file('mimetype', 'application/hwp+zip', { compression: 'STORE' });
@@ -376,11 +417,46 @@ async function normalizeHwpx(input) {
       }
     });
 
+    if (/^Contents\/section\d+\.xml$/.test(path) && tableLayouts.length) {
+      applyHwpxTableLayouts(xml, tableLayouts);
+    }
+
     const declaration = '<?xml version="1.0" encoding="UTF-8"?>\n';
     output.file(path, declaration + new XMLSerializer().serializeToString(xml.documentElement));
   }
 
   return output.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+}
+
+function applyHwpxTableLayouts(xml, tableLayouts) {
+  const hwpNamespace = 'http://www.hancom.co.kr/hwpml/2011/paragraph';
+  const create = (name, attributes) => {
+    const element = xml.createElementNS(hwpNamespace, `hp:${name}`);
+    Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
+    return element;
+  };
+
+  [...xml.getElementsByTagNameNS(hwpNamespace, 'tbl')].forEach((table, tableIndex) => {
+    const layout = tableLayouts[tableIndex];
+    if (!layout || !layout.columnWidths.length) return;
+    const rows = [...table.children].filter(element => element.localName === 'tr');
+    rows.forEach((row, rowIndex) => {
+      let columnIndex = 0;
+      [...row.children].filter(element => element.localName === 'tc').forEach(cell => {
+        const colSpan = Math.max(1, Number(cell.getAttribute('colSpan')) || 1);
+        const rowSpan = Math.max(1, Number(cell.getAttribute('rowSpan')) || 1);
+        const width = layout.columnWidths.slice(columnIndex, columnIndex + colSpan).reduce((sum, value) => sum + value, 0);
+        const height = layout.rowHeights.slice(rowIndex, rowIndex + rowSpan).reduce((sum, value) => sum + value, 0) || 1500;
+        cell.append(
+          create('cellAddr', { colAddr: columnIndex, rowAddr: rowIndex }),
+          create('cellSpan', { colSpan, rowSpan }),
+          create('cellSz', { width, height }),
+          create('cellMargin', { left: 140, right: 140, top: 40, bottom: 40 })
+        );
+        columnIndex += colSpan;
+      });
+    });
+  });
 }
 
 function parsePageRange(value, total) {
