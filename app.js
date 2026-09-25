@@ -330,10 +330,14 @@ async function docxToHwpx() {
   const warningCount = result.messages.filter(message => message.type === 'warning').length;
   const conversion = await prepareDocxConversion(result.value, docxBuffer);
   showStatus('HWPX 문서를 만드는 중…');
-  const { htmlToHwpx } = await import('https://cdn.jsdelivr.net/npm/@ssabrojs/hwpxjs@0.4.0/dist/browser/hwpxjs.browser.mjs');
-  const generated = await htmlToHwpx(conversion.html);
+  const { htmlToHwpx } = await import('https://cdn.jsdelivr.net/npm/hwp-convert@1.13.0/dist/browser/hwp-convert.browser.mjs');
+  const generated = await htmlToHwpx(conversion.html, {
+    title: selectedFiles[0].name.replace(/\.docx$/i, ''),
+    creator: 'For My Tool',
+    page: conversion.pageLayout || undefined,
+  });
   showStatus('한글 편집기 호환 형식으로 정리하는 중…');
-  const bytes = await normalizeHwpx(generated, conversion.tableLayouts);
+  const bytes = await normalizeHwpx(generated, conversion.tableLayouts, conversion.pageLayout);
   downloadBlob(new Blob([bytes], { type: 'application/hwp+zip' }), `${baseName(selectedFiles[0].name)}.hwpx`);
   showStatus(`변환 완료 · 텍스트와 단순 표 중심${warningCount ? ` · Word 서식 경고 ${warningCount}건` : ''}`);
 }
@@ -341,10 +345,10 @@ async function docxToHwpx() {
 async function prepareDocxConversion(html, docxBuffer) {
   const documentZip = await JSZip.loadAsync(docxBuffer);
   const documentXml = await documentZip.file('word/document.xml')?.async('text');
-  if (!documentXml) return { html, tableLayouts: [] };
+  if (!documentXml) return { html, tableLayouts: [], pageLayout: null };
 
   const wordXml = new DOMParser().parseFromString(documentXml, 'application/xml');
-  if (wordXml.querySelector('parsererror')) return { html, tableLayouts: [] };
+  if (wordXml.querySelector('parsererror')) return { html, tableLayouts: [], pageLayout: null };
   const htmlDocument = new DOMParser().parseFromString(`<main>${html}</main>`, 'text/html');
   const wordTables = [...wordXml.getElementsByTagNameNS('*', 'tbl')];
   const htmlTables = [...htmlDocument.querySelectorAll('table')];
@@ -361,6 +365,20 @@ async function prepareDocxConversion(html, docxBuffer) {
       });
     return { columnWidths, rowHeights };
   });
+  const pageSize = wordXml.getElementsByTagNameNS('*', 'pgSz')[0];
+  const pageMargin = wordXml.getElementsByTagNameNS('*', 'pgMar')[0];
+  const pageLayout = pageSize ? {
+    width: Number(wordAttribute(pageSize, 'w')) * 5,
+    height: Number(wordAttribute(pageSize, 'h')) * 5,
+    landscape: wordAttribute(pageSize, 'orient') === 'landscape' ? 'NARROWLY' : 'WIDELY',
+    left: Number(pageMargin && wordAttribute(pageMargin, 'left')) * 5 || 7200,
+    right: Number(pageMargin && wordAttribute(pageMargin, 'right')) * 5 || 7200,
+    top: Number(pageMargin && wordAttribute(pageMargin, 'top')) * 5 || 7200,
+    bottom: Number(pageMargin && wordAttribute(pageMargin, 'bottom')) * 5 || 7200,
+    header: Number(pageMargin && wordAttribute(pageMargin, 'header')) * 5 || 3600,
+    footer: Number(pageMargin && wordAttribute(pageMargin, 'footer')) * 5 || 3600,
+    gutter: Number(pageMargin && wordAttribute(pageMargin, 'gutter')) * 5 || 0
+  } : null;
 
   htmlTables.forEach((table, tableIndex) => {
     const firstMeaningfulRow = [...table.rows].find(row => row.textContent.trim());
@@ -372,10 +390,10 @@ async function prepareDocxConversion(html, docxBuffer) {
     });
   });
 
-  return { html: htmlDocument.querySelector('main').innerHTML, tableLayouts };
+  return { html: htmlDocument.querySelector('main').innerHTML, tableLayouts, pageLayout };
 }
 
-async function normalizeHwpx(input, tableLayouts = []) {
+async function normalizeHwpx(input, tableLayouts = [], pageLayout = null) {
   const source = await JSZip.loadAsync(input);
   const output = new JSZip();
   output.file('mimetype', 'application/hwp+zip', { compression: 'STORE' });
@@ -417,8 +435,9 @@ async function normalizeHwpx(input, tableLayouts = []) {
       }
     });
 
-    if (/^Contents\/section\d+\.xml$/.test(path) && tableLayouts.length) {
-      applyHwpxTableLayouts(xml, tableLayouts);
+    if (/^Contents\/section\d+\.xml$/.test(path)) {
+      if (pageLayout) applyHwpxPageLayout(xml, pageLayout);
+      if (tableLayouts.length) applyHwpxTableLayouts(xml, tableLayouts);
     }
 
     const declaration = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -426,6 +445,41 @@ async function normalizeHwpx(input, tableLayouts = []) {
   }
 
   return output.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+}
+
+function applyHwpxPageLayout(xml, layout) {
+  const hwpNamespace = 'http://www.hancom.co.kr/hwpml/2011/paragraph';
+  const firstParagraph = xml.getElementsByTagNameNS(hwpNamespace, 'p')[0];
+  const firstRun = firstParagraph && [...firstParagraph.children].find(element => element.localName === 'run');
+  if (!firstRun) return;
+  const create = (name, attributes) => {
+    const element = xml.createElementNS(hwpNamespace, `hp:${name}`);
+    Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
+    return element;
+  };
+  const section = create('secPr', {
+    id: '', textDirection: 'HORIZONTAL', spaceColumns: 1134, tabStop: 8000,
+    tabStopVal: 4000, tabStopUnit: 'HWPUNIT', outlineShapeIDRef: 1,
+    memoShapeIDRef: 0, textVerticalWidthHead: 0, masterPageCnt: 0
+  });
+  const page = create('pagePr', {
+    landscape: layout.landscape, width: layout.width, height: layout.height, gutterType: 'LEFT_ONLY'
+  });
+  page.append(create('margin', {
+    header: layout.header, footer: layout.footer, gutter: layout.gutter,
+    left: layout.left, right: layout.right, top: layout.top, bottom: layout.bottom
+  }));
+  section.append(
+    create('grid', { lineGrid: 0, charGrid: 0, wonggojiFormat: 0 }),
+    create('startNum', { pageStartsOn: 'BOTH', page: 0, pic: 0, tbl: 0, equation: 0 }),
+    create('visibility', {
+      hideFirstHeader: 0, hideFirstFooter: 0, hideFirstMasterPage: 0,
+      border: 'SHOW_ALL', fill: 'SHOW_ALL', hideFirstPageNum: 0,
+      hideFirstEmptyLine: 0, showLineNumber: 0
+    }),
+    page
+  );
+  firstRun.prepend(section);
 }
 
 function applyHwpxTableLayouts(xml, tableLayouts) {
@@ -440,6 +494,26 @@ function applyHwpxTableLayouts(xml, tableLayouts) {
     const layout = tableLayouts[tableIndex];
     if (!layout || !layout.columnWidths.length) return;
     const rows = [...table.children].filter(element => element.localName === 'tr');
+    const tableWidth = layout.columnWidths.reduce((sum, value) => sum + value, 0);
+    const tableHeight = layout.rowHeights.reduce((sum, value) => sum + value, 0) || rows.length * 1500;
+    table.setAttribute('id', String(tableIndex + 1));
+    table.setAttribute('zOrder', '0');
+    table.setAttribute('numberingType', 'TABLE');
+    table.setAttribute('textWrap', 'TOP_AND_BOTTOM');
+    table.setAttribute('textFlow', 'BOTH_SIDES');
+    table.setAttribute('lock', '0');
+    table.setAttribute('pageBreak', 'CELL');
+    table.setAttribute('repeatHeader', '0');
+    table.setAttribute('cellSpacing', '0');
+    table.setAttribute('noAdjust', '0');
+    const firstRow = rows[0] || null;
+    table.insertBefore(create('sz', { width: tableWidth, widthRelTo: 'ABSOLUTE', height: tableHeight, heightRelTo: 'ABSOLUTE', protect: 0 }), firstRow);
+    table.insertBefore(create('pos', {
+      treatAsChar: 0, affectLSpacing: 0, flowWithText: 1, allowOverlap: 0, holdAnchorAndSO: 0,
+      vertRelTo: 'PARA', horzRelTo: 'COLUMN', vertAlign: 'TOP', horzAlign: 'LEFT', vertOffset: 0, horzOffset: 0
+    }), firstRow);
+    table.insertBefore(create('outMargin', { left: 0, right: 0, top: 0, bottom: 0 }), firstRow);
+    table.insertBefore(create('inMargin', { left: 140, right: 140, top: 40, bottom: 40 }), firstRow);
     rows.forEach((row, rowIndex) => {
       let columnIndex = 0;
       [...row.children].filter(element => element.localName === 'tc').forEach(cell => {
