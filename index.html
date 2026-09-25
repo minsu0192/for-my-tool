@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PDF와 이미지를 브라우저에서 안전하게 처리하는 개인 도구 모음">
+  <title>My Tools — PDF & Image</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="My Tools 홈">
+      <span class="brand-mark">M</span>
+      <span>MY TOOLS</span>
+    </a>
+    <div class="privacy-pill"><span></span> 모든 작업은 내 브라우저에서 처리됩니다</div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">PRIVATE FILE TOOLKIT</p>
+      <h1>파일 작업을<br><em>빠르고 간단하게.</em></h1>
+      <p class="hero-copy">설치도, 업로드도 필요 없습니다. 필요한 도구를 골라 파일을 놓으면 바로 시작됩니다.</p>
+      <div class="hero-meta">
+        <span>11 TOOLS</span><span>LOCAL PROCESSING</span><span>MOBILE READY</span>
+      </div>
+    </section>
+
+    <section class="tools-section" aria-labelledby="tools-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">TOOLBOX</p><h2 id="tools-title">무엇을 할까요?</h2></div>
+        <div class="filters" role="group" aria-label="도구 필터">
+          <button class="filter active" data-filter="all">전체</button>
+          <button class="filter" data-filter="pdf">PDF</button>
+          <button class="filter" data-filter="image">이미지</button>
+          <button class="filter" data-filter="audio">오디오</button>
+          <button class="filter" data-filter="document">문서</button>
+        </div>
+      </div>
+
+      <div class="tool-grid">
+        <div class="category-heading" data-category="pdf"><span>01</span><div><strong>PDF 도구</strong><small>합치기, 분리, 변환, 압축</small></div></div>
+        <button class="tool-card featured" data-tool="merge" data-category="pdf">
+          <span class="card-index">01</span><span class="card-icon">⇉</span>
+          <span class="card-title">PDF 합치기</span>
+          <span class="card-desc">여러 PDF를 원하는 순서대로 하나로 합칩니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card" data-tool="split" data-category="pdf">
+          <span class="card-index">02</span><span class="card-icon">⑂</span>
+          <span class="card-title">PDF 분리</span>
+          <span class="card-desc">필요한 페이지만 선택하거나 모두 개별 저장합니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card" data-tool="pdf-image" data-category="pdf">
+          <span class="card-index">03</span><span class="card-icon">▧</span>
+          <span class="card-title">PDF → 이미지</span>
+          <span class="card-desc">PDF 페이지를 선명한 JPG 또는 PNG로 바꿉니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card" data-tool="pdf-compress" data-category="pdf">
+          <span class="card-index">04</span><span class="card-icon">↘</span>
+          <span class="card-title">PDF 용량 줄이기</span>
+          <span class="card-desc">페이지를 최적화해 PDF 파일 크기를 줄입니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <div class="category-heading" data-category="image"><span>02</span><div><strong>이미지 도구</strong><small>압축, PDF 만들기, 형식 변환</small></div></div>
+        <button class="tool-card" data-tool="compress" data-category="image">
+          <span class="card-index">05</span><span class="card-icon">↘</span>
+          <span class="card-title">이미지 압축</span>
+          <span class="card-desc">화질을 조절해 이미지 용량을 줄입니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card" data-tool="image-pdf" data-category="image">
+          <span class="card-index">06</span><span class="card-icon">▤</span>
+          <span class="card-title">이미지 → PDF</span>
+          <span class="card-desc">여러 이미지를 한 개의 PDF 문서로 만듭니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card" data-tool="convert" data-category="image">
+          <span class="card-index">07</span><span class="card-icon">⇄</span>
+          <span class="card-title">이미지 형식 변환</span>
+          <span class="card-desc">JPG, PNG, WebP 형식을 자유롭게 변환합니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <div class="category-heading" data-category="audio"><span>03</span><div><strong>오디오 도구</strong><small>MP4·WAV·M4A를 MP3 또는 WAV로</small></div></div>
+        <button class="tool-card audio-card" data-tool="audio-convert" data-category="audio">
+          <span class="card-index">08</span><span class="card-icon">♫</span>
+          <span class="card-title">오디오 변환</span>
+          <span class="card-desc">MP4·WAV·M4A 등의 파일을 MP3 또는 WAV로 바꿉니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+        <div class="category-heading" data-category="document"><span>04</span><div><strong>문서 도구</strong><small>한글·Word·Excel·PowerPoint·PDF 편집</small></div></div>
+        <button class="tool-card document-card" data-tool="hwp-editor" data-category="document">
+          <span class="card-index">09</span><span class="card-icon">한</span>
+          <span class="card-title">한글 문서 편집기</span>
+          <span class="card-desc">HWP·HWPX 파일을 브라우저에서 열고 수정합니다.</span>
+          <span class="card-link">편집기 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card document-card" data-tool="office-editor" data-category="document">
+          <span class="card-index">10</span><span class="card-icon">W</span>
+          <span class="card-title">Office 편집기</span>
+          <span class="card-desc">Word·Excel·PowerPoint·PDF를 열고 수정합니다.</span>
+          <span class="card-link">편집기 열기 <b>↗</b></span>
+        </button>
+        <button class="tool-card document-card" data-tool="docx-hwpx" data-category="document">
+          <span class="card-index">11</span><span class="card-icon">W→한</span>
+          <span class="card-title">Word → 한글</span>
+          <span class="card-desc">DOCX 문서를 한컴오피스에서 열 수 있는 HWPX로 변환합니다.</span>
+          <span class="card-link">도구 열기 <b>↗</b></span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>MY TOOLS</span><span>FILES STAY ON YOUR DEVICE · 2026</span></footer>
+
+  <dialog id="toolDialog">
+    <div class="dialog-shell">
+      <button class="close-button" aria-label="닫기">×</button>
+      <p class="eyebrow" id="dialogEyebrow">PDF TOOL</p>
+      <h2 id="dialogTitle">PDF 합치기</h2>
+      <p id="dialogDescription" class="dialog-description"></p>
+
+      <label class="drop-zone" id="dropZone">
+        <input id="fileInput" type="file" hidden>
+        <span class="upload-icon">＋</span>
+        <strong>파일을 여기에 놓으세요</strong>
+        <small id="acceptHint">또는 클릭해서 파일 선택</small>
+      </label>
+
+      <div id="fileList" class="file-list" aria-live="polite"></div>
+      <div id="options" class="options"></div>
+      <div id="status" class="status" aria-live="polite"></div>
+      <button id="runButton" class="run-button" disabled>파일을 먼저 선택하세요</button>
+    </div>
+  </dialog>
+
+  <section id="documentWorkspace" class="document-workspace" hidden aria-label="문서 편집기">
+    <header class="workspace-header">
+      <div><strong id="workspaceTitle">문서 편집기</strong><small id="workspaceStatus">파일을 선택하세요</small></div>
+      <label class="workspace-file-button">파일 열기<input id="workspaceFileInput" type="file" hidden></label>
+      <button id="workspaceClose" class="workspace-close">편집기 닫기 ×</button>
+    </header>
+    <div id="hwpEditorMount" class="editor-mount"></div>
+    <iframe id="officeEditorFrame" class="office-frame" title="Office 문서 편집기" hidden></iframe>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.10.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

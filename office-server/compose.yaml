@@ -1,0 +1,35 @@
+services:
+  documentserver:
+    image: onlyoffice/documentserver:latest
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_logs:/var/log/onlyoffice
+    ports:
+      - "8080:80"
+
+  integration:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - documentserver
+    environment:
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      DOCUMENT_SERVER_URL: http://documentserver
+      DOCUMENT_SERVER_PUBLIC_URL: ${DOCUMENT_SERVER_PUBLIC_URL:?Public document server URL is required}
+      PUBLIC_URL: ${PUBLIC_URL:?Public integration server URL is required}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:?Cloudflare Pages origin is required}
+      DATA_DIR: /data
+    volumes:
+      - documents:/data/documents
+    ports:
+      - "3000:3000"
+
+volumes:
+  onlyoffice_data:
+  onlyoffice_logs:
+  documents:
