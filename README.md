@@ -16,6 +16,9 @@ PDF와 이미지를 서버 업로드 없이 브라우저에서 처리하는 개�
 - DOCX/XLSX/PPTX/PDF 열기 및 편집 (`ranuts/document`, 브라우저 로컬 처리)
 - DOCX를 HWPX로 변환
 
+Word → HWPX 변환 결과는 한글 편집기 호환성을 위해 MIME, 문단 ID, HWP XML 속성 네임스페이스를
+정규화한 뒤 저장합니다. 복잡한 Word 전용 개체와 정밀 레이아웃은 변환 과정에서 달라질 수 있습니다.
+
 ## 문서 편집기
 
 HWP/HWPX 편집기는 `@rhwp/editor`를 이용하며 브라우저에서 직접 실행됩니다.

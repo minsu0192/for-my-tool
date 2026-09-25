@@ -328,8 +328,59 @@ async function docxToHwpx() {
   const result = await window.mammoth.convertToHtml({ arrayBuffer: await selectedFiles[0].arrayBuffer() });
   showStatus('HWPX 문서를 만드는 중…');
   const { htmlToHwpx } = await import('https://cdn.jsdelivr.net/npm/@ssabrojs/hwpxjs@0.4.0/dist/browser/hwpxjs.browser.mjs');
-  const bytes = await htmlToHwpx(result.value);
-  downloadBlob(new Blob([bytes], { type: 'application/vnd.hancom.hwpx' }), `${baseName(selectedFiles[0].name)}.hwpx`);
+  const generated = await htmlToHwpx(result.value);
+  showStatus('한글 편집기 호환 형식으로 정리하는 중…');
+  const bytes = await normalizeHwpx(generated);
+  downloadBlob(new Blob([bytes], { type: 'application/hwp+zip' }), `${baseName(selectedFiles[0].name)}.hwpx`);
+}
+
+async function normalizeHwpx(input) {
+  const source = await JSZip.loadAsync(input);
+  const output = new JSZip();
+  output.file('mimetype', 'application/hwp+zip', { compression: 'STORE' });
+  let paragraphId = 0;
+  const hwpNamespaces = new Set([
+    'http://www.hancom.co.kr/hwpml/2011/app',
+    'http://www.hancom.co.kr/hwpml/2011/core',
+    'http://www.hancom.co.kr/hwpml/2011/head',
+    'http://www.hancom.co.kr/hwpml/2011/paragraph',
+    'http://www.hancom.co.kr/hwpml/2011/section',
+    'http://www.hancom.co.kr/hwpml/2016/paragraph'
+  ]);
+
+  for (const [path, entry] of Object.entries(source.files)) {
+    if (path === 'mimetype') continue;
+    if (entry.dir) {
+      output.folder(path.replace(/\/$/, ''));
+      continue;
+    }
+    if (!path.endsWith('.xml') && !path.endsWith('.hpf')) {
+      output.file(path, await entry.async('uint8array'));
+      continue;
+    }
+
+    const xmlText = await entry.async('text');
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (xml.querySelector('parsererror')) throw new Error(`${path} XML을 정리하지 못했습니다.`);
+
+    xml.querySelectorAll('*').forEach(element => {
+      [...element.attributes].forEach(attribute => {
+        if (!attribute.prefix || !hwpNamespaces.has(attribute.namespaceURI)) return;
+        const value = attribute.value;
+        const name = attribute.localName;
+        element.removeAttributeNode(attribute);
+        if (!element.hasAttribute(name)) element.setAttribute(name, value);
+      });
+      if (element.localName === 'p' && element.namespaceURI === 'http://www.hancom.co.kr/hwpml/2011/paragraph' && !element.hasAttribute('id')) {
+        element.setAttribute('id', String(paragraphId++));
+      }
+    });
+
+    const declaration = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    output.file(path, declaration + new XMLSerializer().serializeToString(xml.documentElement));
+  }
+
+  return output.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
 function parsePageRange(value, total) {
