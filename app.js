@@ -67,6 +67,10 @@ let activeTool = null;
 let selectedFiles = [];
 let hwpEditor = null;
 let workspaceMode = null;
+let officeEditorReady = false;
+let pendingOfficeFile = null;
+let currentOfficeExtension = 'docx';
+let officeMessageId = 0;
 
 if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -408,6 +412,7 @@ async function openDocumentWorkspace(mode) {
   workspaceFileInput.accept = mode === 'hwp' ? '.hwp,.hwpx' : '.doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf';
   hwpEditorMount.hidden = mode !== 'hwp';
   officeEditorFrame.hidden = mode !== 'office';
+  document.querySelector('#workspaceSave').hidden = mode !== 'office';
   workspaceFileInput.value = '';
   if (mode === 'hwp' && !hwpEditor) {
     workspaceStatus.textContent = '한글 편집기를 불러오는 중…';
@@ -418,6 +423,15 @@ async function openDocumentWorkspace(mode) {
     } catch (error) {
       console.error(error);
       workspaceStatus.textContent = '한글 편집기를 불러오지 못했습니다. 인터넷 연결을 확인하세요.';
+    }
+  }
+  if (mode === 'office' && !officeEditorFrame.src) {
+    const editorUrl = window.MY_TOOLS_CONFIG && window.MY_TOOLS_CONFIG.officeEditorUrl;
+    if (!editorUrl) {
+      workspaceStatus.textContent = 'Office 편집기 주소가 설정되지 않았습니다.';
+    } else {
+      officeEditorFrame.src = editorUrl;
+      workspaceStatus.textContent = '무료 Office 편집기를 불러오는 중…';
     }
   }
 }
@@ -448,15 +462,43 @@ workspaceFileInput.addEventListener('change', async () => {
 });
 
 async function openOfficeFile(file) {
-  const baseUrl = (window.MY_TOOLS_CONFIG && window.MY_TOOLS_CONFIG.officeAppUrl || '').replace(/\/$/, '');
-  if (!baseUrl) throw new Error('Office 문서 서버 주소가 아직 설정되지 않았습니다. config.js를 확인하세요.');
-  workspaceStatus.textContent = `${file.name}을 문서 서버로 보내는 중…`;
-  const body = new FormData();
-  body.append('document', file);
-  const response = await fetch(`${baseUrl}/api/documents`, { method: 'POST', body });
-  if (!response.ok) throw new Error(`문서 서버 오류 (${response.status})`);
-  const result = await response.json();
-  officeEditorFrame.src = result.editorUrl.startsWith('http') ? result.editorUrl : `${baseUrl}${result.editorUrl}`;
-  officeEditorFrame.hidden = false;
-  workspaceStatus.textContent = `${file.name} · 자동 저장 사용 중`;
+  pendingOfficeFile = file;
+  currentOfficeExtension = file.name.split('.').pop().toLowerCase();
+  workspaceStatus.textContent = officeEditorReady ? `${file.name} 여는 중…` : '편집기 준비 후 자동으로 문서를 엽니다…';
+  if (officeEditorReady) sendOfficeMessage('document:open-file', { file, readonly: false });
 }
+
+function officeEditorOrigin() {
+  return new URL(window.MY_TOOLS_CONFIG.officeEditorUrl).origin;
+}
+
+function sendOfficeMessage(type, payload = {}) {
+  officeEditorFrame.contentWindow.postMessage({ id: String(++officeMessageId), type, payload }, officeEditorOrigin());
+}
+
+window.addEventListener('message', event => {
+  if (!window.MY_TOOLS_CONFIG.officeEditorUrl || event.origin !== officeEditorOrigin()) return;
+  const { type, payload } = event.data || {};
+  if (!type || !type.startsWith('document:')) return;
+  if (type === 'document:ready') {
+    officeEditorReady = true;
+    workspaceStatus.textContent = 'Office 문서를 선택하세요';
+    if (pendingOfficeFile) sendOfficeMessage('document:open-file', { file: pendingOfficeFile, readonly: false });
+  } else if (type === 'document:opened') {
+    workspaceStatus.textContent = `${pendingOfficeFile ? pendingOfficeFile.name : '문서'} · 브라우저에서 편집 중`;
+  } else if (type === 'document:saved' && payload && payload.file) {
+    downloadBlob(payload.file, payload.fileName || `edited.${currentOfficeExtension}`);
+    workspaceStatus.textContent = '수정한 문서를 내 기기에 저장했습니다.';
+  } else if (type === 'document:error') {
+    workspaceStatus.textContent = payload && payload.message ? payload.message : 'Office 문서 처리 중 오류가 발생했습니다.';
+  }
+});
+
+document.querySelector('#workspaceSave').addEventListener('click', () => {
+  if (!officeEditorReady || !pendingOfficeFile) {
+    workspaceStatus.textContent = '먼저 Office 문서를 여세요.';
+    return;
+  }
+  workspaceStatus.textContent = '수정한 문서를 내보내는 중…';
+  sendOfficeMessage('document:save', { targetExt: currentOfficeExtension.toUpperCase() });
+});
