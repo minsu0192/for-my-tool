@@ -499,7 +499,10 @@ workspaceFileInput.addEventListener('change', async () => {
     if (workspaceMode === 'hwp') {
       if (!hwpEditor) throw new Error('한글 편집기가 준비되지 않았습니다.');
       workspaceStatus.textContent = `${file.name} 여는 중…`;
-      const result = await hwpEditor.loadFile(await file.arrayBuffer(), file.name, { suppressDialogs: false });
+      const result = await hwpEditor.loadFile(await file.arrayBuffer(), file.name, {
+        suppressDialogs: true,
+        skipUnsavedGuard: false
+      });
       workspaceStatus.textContent = `${file.name} · ${result.pageCount || '-'}페이지`;
     } else {
       await openOfficeFile(file);
