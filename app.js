@@ -497,19 +497,26 @@ workspaceFileInput.addEventListener('change', async () => {
   if (!file) return;
   try {
     if (workspaceMode === 'hwp') {
-      if (!hwpEditor) throw new Error('한글 편집기가 준비되지 않았습니다.');
-      workspaceStatus.textContent = `${file.name} 여는 중…`;
-      const result = await hwpEditor.loadFile(await file.arrayBuffer(), file.name, {
+      if (!hwpEditor) throw new Error('한글 편집기가 준비되지 않았습니다. 편집기를 닫았다가 다시 열어 주세요.');
+      const isHwpx = file.name.toLowerCase().endsWith('.hwpx');
+      workspaceStatus.textContent = isHwpx ? `${file.name} 구조 확인 및 보정 중…` : `${file.name} 여는 중…`;
+      const fileBuffer = await file.arrayBuffer();
+      const editorBytes = isHwpx ? await normalizeHwpx(fileBuffer) : fileBuffer;
+      if (isHwpx) workspaceStatus.textContent = `${file.name} 편집기에 여는 중…`;
+      const result = await hwpEditor.loadFile(editorBytes, file.name, {
         suppressDialogs: true,
         skipUnsavedGuard: false
       });
-      workspaceStatus.textContent = `${file.name} · ${result.pageCount || '-'}페이지`;
+      workspaceStatus.textContent = `${file.name} · ${result.pageCount || '-'}페이지${isHwpx ? ' · 호환성 검사 완료' : ''}`;
     } else {
       await openOfficeFile(file);
     }
   } catch (error) {
     console.error(error);
-    workspaceStatus.textContent = error.message || '문서를 열지 못했습니다.';
+    const isHwpx = file.name.toLowerCase().endsWith('.hwpx');
+    workspaceStatus.textContent = isHwpx
+      ? `HWPX 구조를 읽지 못했습니다: ${error.message || '손상되었거나 지원하지 않는 문서입니다.'}`
+      : `HWP 문서를 열지 못했습니다: ${error.message || '손상되었거나 지원하지 않는 문서입니다.'}`;
   } finally {
     workspaceFileInput.value = '';
   }
