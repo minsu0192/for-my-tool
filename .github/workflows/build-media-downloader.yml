@@ -1,0 +1,73 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "media-downloader/**"
+      - ".github/workflows/build-media-downloader.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: MyMediaDownloader-Windows-x64
+          - os: macos-13
+            artifact: MyMediaDownloader-macOS-x64
+          - os: macos-14
+            artifact: MyMediaDownloader-macOS-arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: media-downloader
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Prepare tools on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bin | Out-Null
+          Invoke-WebRequest https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -OutFile bin/yt-dlp.exe
+          Invoke-WebRequest https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip -OutFile deno.zip
+          Expand-Archive deno.zip -DestinationPath bin -Force
+          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-temp -Force
+          Copy-Item (Get-ChildItem ffmpeg-temp -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName bin/ffmpeg.exe
+          Copy-Item (Get-ChildItem ffmpeg-temp -Recurse -Filter ffprobe.exe | Select-Object -First 1).FullName bin/ffprobe.exe
+      - name: Prepare tools on macOS
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p bin
+          curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos -o bin/yt-dlp
+          DENO_ARCH=$(if [ "$(uname -m)" = "arm64" ]; then echo aarch64; else echo x86_64; fi)
+          curl -L "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-apple-darwin.zip" -o deno.zip
+          unzip -o deno.zip -d bin
+          curl -L https://evermeet.cx/ffmpeg/getrelease/zip -o ffmpeg.zip
+          curl -L https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip -o ffprobe.zip
+          unzip -o ffmpeg.zip -d bin
+          unzip -o ffprobe.zip -d bin
+          chmod +x bin/*
+      - name: Run tests
+        run: python -m unittest discover -s tests
+      - name: Build app
+        run: pyinstaller --noconfirm MyMediaDownloader.spec
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/MyMediaDownloader/* -DestinationPath ${{ matrix.artifact }}.zip
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/My Media Downloader.app" "${{ matrix.artifact }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: media-downloader/${{ matrix.artifact }}.zip
