@@ -77,7 +77,18 @@ def find_binary(name: str) -> str:
 
 
 def base_command() -> list[str]:
-    command = [find_binary("yt-dlp"), "--ignore-config", "--newline", "--no-playlist"]
+    command = [
+        find_binary("yt-dlp"),
+        "--ignore-config",
+        "--newline",
+        "--no-playlist",
+        # The official standalone yt-dlp bundles certifi.  On managed PCs that
+        # bypasses locally installed corporate/intermediate CAs and causes
+        # CERTIFICATE_VERIFY_FAILED.  Keep certificate verification enabled,
+        # but ask yt-dlp to use the operating system's trusted certificates.
+        "--compat-options",
+        "no-certifi",
+    ]
     try:
         command.extend(["--ffmpeg-location", str(Path(find_binary("ffmpeg")).parent)])
     except DownloaderError:
@@ -179,6 +190,11 @@ def parse_progress(line: str) -> tuple[float, str] | None:
 
 def _friendly_error(message: str) -> str:
     lowered = message.lower()
+    if "certificate_verify_failed" in lowered or "certificate verify failed" in lowered:
+        return (
+            "보안 인증서를 확인하지 못했습니다. Windows/macOS의 날짜와 시간을 확인한 뒤, "
+            "회사·학교 네트워크라면 관리자 인증서가 신뢰 저장소에 설치되어 있는지 확인해 주세요."
+        )
     if "sign in to confirm" in lowered or "not a bot" in lowered:
         return "서비스에서 자동 요청을 차단했습니다. 잠시 후 다시 시도해 주세요."
     if "javascript runtime" in lowered or "challenge solving" in lowered:

@@ -2,10 +2,21 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from engine import DownloadOptions, build_download_command, parse_progress, validate_url
+from engine import DownloadOptions, base_command, build_download_command, parse_progress, validate_url
 
 
 class EngineTests(unittest.TestCase):
+    @patch("engine.find_binary")
+    def test_base_command_uses_system_certificates(self, find_binary):
+        find_binary.side_effect = lambda name: f"/tools/{name}"
+
+        command = base_command()
+
+        self.assertIn("--compat-options", command)
+        option_index = command.index("--compat-options")
+        self.assertEqual(command[option_index + 1], "no-certifi")
+        self.assertNotIn("--no-check-certificates", command)
+
     def test_validates_http_urls(self):
         self.assertEqual(validate_url(" https://example.com/video "), "https://example.com/video")
         with self.assertRaises(ValueError):

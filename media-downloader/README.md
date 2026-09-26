@@ -17,6 +17,10 @@
 
 Python 3.11 이상이 필요합니다. `bin` 폴더에 `yt-dlp`, `ffmpeg`, `ffprobe`, `deno`를 넣거나 PATH에서 실행 가능하게 준비합니다.
 
+## 인증서 오류
+
+앱은 인증서 검증을 끄지 않고 Windows/macOS의 신뢰할 수 있는 시스템 인증서를 사용합니다. 회사나 학교 네트워크에서 `CERTIFICATE_VERIFY_FAILED`가 계속 나오면 운영체제의 날짜/시간을 확인하고, 네트워크 관리자가 제공한 루트 인증서가 시스템 신뢰 저장소에 설치되어 있는지 확인하세요.
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -40,4 +44,3 @@ GitHub 저장소에서 `Build desktop apps` 워크플로를 수동 실행하면 
 - `MyMediaDownloader-macOS-x64.zip`
 
 서명되지 않은 초기 빌드이므로 Windows SmartScreen이나 macOS Gatekeeper 안내가 표시될 수 있습니다. 공개 배포 전에는 각 플랫폼 코드 서명을 권장합니다.
-
